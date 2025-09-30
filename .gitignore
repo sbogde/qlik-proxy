@@ -1,0 +1,43 @@
+# Node dependencies and logs
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime artifacts
+dist/
+build/
+tmp/
+temp/
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+coverage/
+.nyc_output/
+*.tgz
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+
+# Environment files (keep examples)
+.env
+.env.*
+!.env.example
+
+# Cloudflare Tunnel secrets (keep template)
+cloudflared/config.yml
+cloudflared/*.json
+!cloudflared/config.yml.example
+
+# Editor/OS cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace

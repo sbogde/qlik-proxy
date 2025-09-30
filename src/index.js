@@ -1,0 +1,66 @@
+import "dotenv/config";
+import express from "express";
+import http from "http";
+import httpProxy from "http-proxy";
+import { buildCors } from "./cors.js";
+import { harden } from "./security.js";
+import { httpLogger } from "./logger.js";
+
+const PORT = process.env.PORT || 3000;
+const TARGET_HOST = process.env.TARGET_HOST || "https://sense-demo.qlik.com";
+
+const app = express();
+const server = http.createServer(app);
+
+const proxy = httpProxy.createProxyServer({
+  changeOrigin: true,
+  secure: true, // validate TLS of target
+  xfwd: true, // add X-Forwarded-* headers
+});
+
+// ----------- middleware
+app.use(httpLogger);
+app.use(express.json({ limit: "512kb" }));
+app.use(buildCors());
+harden(app);
+
+// Health
+app.get("/health", (_, res) => res.json({ ok: true, target: TARGET_HOST }));
+
+// ---- HTTP proxy: prefix /api -> TARGET_HOST
+app.use("/api", (req, res) => {
+  const target = TARGET_HOST + req.originalUrl.replace(/^\/api/, "");
+  proxy.web(req, res, { target }, (err) => {
+    console.error("HTTP proxy error:", err?.message);
+    if (!res.headersSent) res.status(502).send("Proxy error");
+  });
+});
+
+// ---- OPTIONAL: sanity endpoint to show which host we proxy
+app.get("/", (_, res) =>
+  res.type("text").send(`qlik-proxy → ${TARGET_HOST}\n`)
+);
+
+// ---- WebSocket proxy: forward engine connections
+server.on("upgrade", (req, socket, head) => {
+  // Convert https:// -> wss://
+  const targetWs = TARGET_HOST.replace(/^http/i, "ws");
+
+  // Tip: if a target insists on an Origin, uncomment next line:
+  // req.headers.origin = TARGET_HOST;
+
+  proxy.ws(req, socket, head, { target: targetWs }, (err) => {
+    console.error("WS proxy error:", err?.message);
+    try {
+      socket.destroy();
+    } catch (_) {}
+  });
+});
+
+// ---- start
+server.listen(PORT, () => {
+  console.log(`qlik-proxy listening on :${PORT}`);
+  console.log(
+    `→ forwarding HTTP under /api/* and WS upgrades to ${TARGET_HOST}`
+  );
+});
