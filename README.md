@@ -7,8 +7,6 @@ Use it to let frontends (localhost, lovable.app, your domain) talk to
 ## Quick start (local)
 
 ```bash
-cp .env.example .env
-# edit .env: add your origins and a strong PROXY_TOKEN
 npm i
 npm run dev
 ```
