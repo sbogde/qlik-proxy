@@ -18,6 +18,11 @@ const proxy = httpProxy.createProxyServer({
   xfwd: true, // add X-Forwarded-* headers
 });
 
+const swallowStreamError = (label) => (error) => {
+  if (!error) return;
+  console.error(`${label} stream error:`, error?.message || error);
+};
+
 proxy.on("error", (err, req, res) => {
   const message = err?.message || err;
   console.error("Proxy error:", message);
@@ -46,10 +51,10 @@ proxy.on("error", (err, req, res) => {
   }
 });
 
-proxy.on("proxyRes", (proxyRes) => {
-  proxyRes.on("error", (err) => {
-    console.error("Proxy response error:", err?.message || err);
-  });
+proxy.on("proxyRes", (proxyRes, req, res) => {
+    proxyRes.on("error", swallowStreamError("proxyRes"));
+    req?.on("error", swallowStreamError("proxyReq"));
+    res?.on("error", swallowStreamError("proxyClient"));
 });
 
 // ----------- middleware
@@ -64,6 +69,9 @@ app.get("/health", (_, res) => res.json({ ok: true, target: TARGET_HOST }));
 // ---- HTTP proxy: prefix /api -> TARGET_HOST
 app.use("/api", (req, res) => {
   const target = TARGET_HOST + req.originalUrl.replace(/^\/api/, "");
+  req.on("error", swallowStreamError("clientReq"));
+  res.on("error", swallowStreamError("clientRes"));
+
   proxy.web(req, res, { target }, (err) => {
     console.error("HTTP proxy error:", err?.message);
     if (!res.headersSent) res.status(502).send("Proxy error");
@@ -82,6 +90,9 @@ server.on("upgrade", (req, socket, head) => {
 
   // Tip: if a target insists on an Origin, uncomment next line:
   // req.headers.origin = TARGET_HOST;
+
+  socket.on("error", swallowStreamError("wsClient"));
+  req.on("error", swallowStreamError("wsReq"));
 
   proxy.ws(req, socket, head, { target: targetWs }, (err) => {
     console.error("WS proxy error:", err?.message);
