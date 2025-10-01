@@ -29,19 +29,15 @@ export function harden(app) {
     const isWsUpgrade =
       (req.headers.upgrade || "").toLowerCase() === "websocket";
 
-    let provided = req.header("x-proxy-token");
-
-    if (!provided && isWsUpgrade) {
-      try {
-        const url = new URL(
-          req.originalUrl || req.url,
-          `http://${req.headers.host || "localhost"}`
-        );
-        provided = url.searchParams.get("token");
-      } catch (err) {
-        console.warn("Failed to parse WS token query:", err?.message || err);
-      }
+    if (isWsUpgrade) {
+      const urlPreview = req.originalUrl || req.url || "";
+      console.log(
+        `[security] WS upgrade from ${req.headers.origin || req.headers.host} url=${urlPreview}`
+      );
+      return next();
     }
+
+    const provided = req.header("x-proxy-token");
 
     if (provided !== token) {
       return res.status(401).json({ error: "unauthorised" });

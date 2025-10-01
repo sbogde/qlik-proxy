@@ -8,6 +8,8 @@ import { httpLogger } from "./logger.js";
 
 const PORT = process.env.PORT || 3000;
 const TARGET_HOST = process.env.TARGET_HOST || "https://sense-demo.qlik.com";
+const PROXY_TOKEN = process.env.PROXY_TOKEN;
+const DEV_BYPASS = !PROXY_TOKEN && process.env.NODE_ENV === "development";
 
 const app = express();
 const server = http.createServer(app);
@@ -91,13 +93,34 @@ server.on("upgrade", (req, socket, head) => {
   // Tip: if a target insists on an Origin, uncomment next line:
   // req.headers.origin = TARGET_HOST;
 
-  if (req.url && req.url.includes("token=")) {
-    try {
-      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  let queryToken;
+  try {
+    const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    queryToken = url.searchParams.get("token");
+    if (queryToken) {
       url.searchParams.delete("token");
-      req.url = url.pathname + (url.searchParams.size ? `?${url.searchParams.toString()}` : "");
-    } catch (err) {
-      console.warn("Failed to clean WS token from URL:", err?.message || err);
+      req.url =
+        url.pathname +
+        (url.searchParams.size
+          ? `?${url.searchParams.toString()}`
+          : "");
+    }
+  } catch (err) {
+    console.warn("Failed to parse WS request URL:", err?.message || err);
+  }
+
+  const headerToken = req.headers["x-proxy-token"];
+  const providedToken = headerToken || queryToken;
+
+  if (!DEV_BYPASS && PROXY_TOKEN) {
+    if (providedToken !== PROXY_TOKEN) {
+      console.warn(
+        "WebSocket upgrade rejected: missing or invalid token from",
+        req.headers.origin || req.headers.host
+      );
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
     }
   }
 
