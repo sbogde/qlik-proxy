@@ -18,6 +18,40 @@ const proxy = httpProxy.createProxyServer({
   xfwd: true, // add X-Forwarded-* headers
 });
 
+proxy.on("error", (err, req, res) => {
+  const message = err?.message || err;
+  console.error("Proxy error:", message);
+
+  if (res) {
+    if (typeof res.writeHead === "function" && !res.headersSent) {
+      res.writeHead(502, { "Content-Type": "text/plain" });
+      res.end("Proxy error");
+    } else if (typeof res.end === "function") {
+      try {
+        res.end();
+      } catch (_) {}
+    }
+
+    if (typeof res.destroy === "function") {
+      try {
+        res.destroy();
+      } catch (_) {}
+    }
+  }
+
+  if (req && typeof req.destroy === "function") {
+    try {
+      req.destroy();
+    } catch (_) {}
+  }
+});
+
+proxy.on("proxyRes", (proxyRes) => {
+  proxyRes.on("error", (err) => {
+    console.error("Proxy response error:", err?.message || err);
+  });
+});
+
 // ----------- middleware
 app.use(httpLogger);
 app.use(express.json({ limit: "512kb" }));
