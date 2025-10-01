@@ -26,8 +26,26 @@ export function harden(app) {
       return next();
     }
 
-    const t = req.header("x-proxy-token");
-    if (t !== token) return res.status(401).json({ error: "unauthorised" });
+    const isWsUpgrade =
+      (req.headers.upgrade || "").toLowerCase() === "websocket";
+
+    let provided = req.header("x-proxy-token");
+
+    if (!provided && isWsUpgrade) {
+      try {
+        const url = new URL(
+          req.originalUrl || req.url,
+          `http://${req.headers.host || "localhost"}`
+        );
+        provided = url.searchParams.get("token");
+      } catch (err) {
+        console.warn("Failed to parse WS token query:", err?.message || err);
+      }
+    }
+
+    if (provided !== token) {
+      return res.status(401).json({ error: "unauthorised" });
+    }
     next();
   });
 }

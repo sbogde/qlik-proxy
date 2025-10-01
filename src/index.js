@@ -91,6 +91,16 @@ server.on("upgrade", (req, socket, head) => {
   // Tip: if a target insists on an Origin, uncomment next line:
   // req.headers.origin = TARGET_HOST;
 
+  if (req.url && req.url.includes("token=")) {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      url.searchParams.delete("token");
+      req.url = url.pathname + (url.searchParams.size ? `?${url.searchParams.toString()}` : "");
+    } catch (err) {
+      console.warn("Failed to clean WS token from URL:", err?.message || err);
+    }
+  }
+
   socket.on("error", swallowStreamError("wsClient"));
   req.on("error", swallowStreamError("wsReq"));
 
