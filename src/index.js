@@ -124,6 +124,12 @@ server.on("upgrade", (req, socket, head) => {
     }
   }
 
+  try {
+    req.headers.origin = TARGET_HOST;
+  } catch (err) {
+    console.warn("Failed to set Origin header for WS request:", err?.message || err);
+  }
+
   socket.on("error", swallowStreamError("wsClient"));
   req.on("error", swallowStreamError("wsReq"));
 
